@@ -1,23 +1,10 @@
-from flask import Flask, request, jsonify
 import telebot
 import random
 import time
-import threading
 import os
 
-# Токен будет браться из настроек Render (Environment Variable), а не из кода!
 BOT_TOKEN = os.environ.get('8987546633:AAGehEF6GHQCnjWTrpYbaqf7qDXlh37LACk')
 bot = telebot.TeleBot(BOT_TOKEN)
-
-app = Flask(__name__)
-
-# Разрешаем запросы с твоего GitHub Pages сайта
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
 
 active_codes = {}
 sessions = {}
@@ -45,6 +32,16 @@ def handle_code(message):
     else:
         bot.send_message(message.chat.id, "❌ Неверный код.")
 
+# Тут мы создаем простой веб-сервер для связи с сайтом (сайту нужен адрес)
+from flask import Flask, request, jsonify
+app = Flask(__name__)
+
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+    return response
+
 @app.route('/api/get_code', methods=['POST'])
 def get_code():
     code = str(random.randint(1000, 9999))
@@ -65,17 +62,9 @@ def check_code():
         return jsonify({"success": False, "status": "waiting"})
     return jsonify({"success": False, "status": "invalid"})
 
-# Запуск бота в фоне
-def run_bot():
-    while True:
-        try:
-            bot.polling(none_stop=True, timeout=60)
-        except Exception as e:
-            print("Ошибка бота, ждем 5 сек...")
-            time.sleep(5)
-
-# Render требует, чтобы сервер слушал порт
 if __name__ == '__main__':
-    threading.Thread(target=run_bot, daemon=True).start()
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    # Запускаем бота в отдельном потоке
+    import threading
+    threading.Thread(target=lambda: bot.polling(none_stop=True), daemon=True).start()
+    # Запускаем Flask для сайта
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
